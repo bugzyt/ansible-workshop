@@ -1,0 +1,52 @@
+---
+- name: Deploy hardened sudoers file to all hosts
+- hosts: all
+  become: true
+  gather_facts: true
+  vars:
+    sudo_dir: /etc/sudoers.d
+    sudo_dest: "{{ sudo_dir }}/hardened"
+
+  tasks:
+    - name: Ensure sudoers.d directory exists
+      file:
+        path: "{{ sudo_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: 0755
+
+    - name: Deploy hardened sudoers (validation syntax before replacing)
+      block:
+        - name: Template sudoers with visudo validation
+          template:
+            src: "templates-lab/hardened.j2"
+            dest: "{{ sudo_dest }}"
+            owner: root
+            group: root
+            mode: '0440'
+            validate: "/usr/sbin/visudo -cf %s"
+          register: deploy_result
+
+        - name: Confirm deployment succeeded
+          debug:
+            msg: "Sudoers deployed to {{ inventory_hostname }} ({{ sudo_dest }}). Changed={{ deploy_result.changed }}"
+
+        - name: Re-validate final sudoers file (double check)
+          command: /usr/sbin/visudo -cf "{{ sudo_dest }}"
+          register: visudo_check
+          changed_when: false
+
+        - name: Show visudo output
+          debug:
+            var: visudo_check.stdout_lines
+
+      rescue:
+        - name: Report validation or deployment failure
+          debug:
+            msg: |
+              Deployment FAILED on {{ inventory_hostname }}.
+              The template failed visudo validation and was not written.
+        - name: Fail the play for this host with message
+          fail:
+            msg: "Sudoers validation failed on {{ inventory_hostname }} - template not deployed"

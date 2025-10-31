@@ -1,0 +1,4 @@
+localhost
+[webservers]
+node1 ansible_host=44.242.251.174
+node2 ansible_host=44.244.131.214
